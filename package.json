@@ -11,7 +11,10 @@
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "next": "15.3.4"
+    "next": "15.3.4",
+    "@supabase/supabase-js": "^2.39.1",
+    "@supabase/auth-helpers-nextjs": "^0.8.1",
+    "@supabase/auth-helpers-react": "^0.4.3"
   },
   "devDependencies": {
     "typescript": "^5",
