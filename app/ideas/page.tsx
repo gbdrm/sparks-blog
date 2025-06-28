@@ -1,26 +1,42 @@
 'use client'
-import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
+import { useSessionContext } from '@supabase/auth-helpers-react'
+import { createBrowserClient } from '@supabase/ssr'
 import { useEffect, useState } from 'react'
 
+interface Idea {
+  id: number
+  text: string
+  created_at: string
+}
+
 export default function IdeasPage() {
-  const session = useSession()
-  const supabase = useSupabaseClient()
-  const [ideas, setIdeas] = useState<any[]>([])
+  const { session } = useSessionContext()
+  // Replace with your actual env variables or config
+  const supabase = createBrowserClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!)
+  const [ideas, setIdeas] = useState<Idea[]>([])
   const [text, setText] = useState('')
 
   const fetchIdeas = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('ideas')
       .select('*')
       .order('created_at', { ascending: false })
+    if (error) {
+      console.error(error)
+      return
+    }
     setIdeas(data || [])
   }
 
   const addIdea = async () => {
     if (!text.trim()) return
-    await supabase.from('ideas').insert({ text })
+    const { error } = await supabase.from('ideas').insert([{ text }])
+    if (error) {
+      console.error(error)
+      return
+    }
     setText('')
-    fetchIdeas()
+    await fetchIdeas()
   }
 
   useEffect(() => {
