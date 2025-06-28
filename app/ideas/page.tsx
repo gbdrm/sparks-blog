@@ -6,6 +6,7 @@ interface Idea {
   id: number
   text: string
   created_at: string
+  user_email?: string
 }
 
 export default function IdeasPage() {
@@ -14,8 +15,10 @@ export default function IdeasPage() {
   const [ideas, setIdeas] = useState<Idea[]>([])
   const [text, setText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const fetchIdeas = async () => {
+    setIsLoading(true)
     const { data, error } = await supabase
       .from('Ideas')
       .select('*')
@@ -23,12 +26,14 @@ export default function IdeasPage() {
       .limit(10)
     if (error) {
       console.error(error)
+      setIsLoading(false)
       return
     }
     setIdeas(data || [])
+    setIsLoading(false)
   }
 
-  const addIdea = async () => {
+  const postIdea = async () => {
     if (!text.trim()) return
     setIsSubmitting(true)
     const { error } = await supabase.from('Ideas').insert([{ text }])
@@ -86,10 +91,9 @@ export default function IdeasPage() {
                 </svg>
               </button>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Share Your Ideas
+                Ideas
               </h1>
             </div>
-            
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
                 <span className="text-white text-sm font-medium">
@@ -105,112 +109,71 @@ export default function IdeasPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Add Idea Section */}
-        <div className="bg-white rounded-2xl p-8 shadow-xl mb-12 border border-gray-100">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-            <span className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mr-3">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </span>
-            Share your idea
-          </h2>
-          
-          <div className="space-y-4">
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="What's your brilliant idea? Share it with the community..."
-              className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              rows={4}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.ctrlKey) {
-                  addIdea()
-                }
-              }}
-            />
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                Press Ctrl+Enter to submit
-              </p>
-              <button 
-                onClick={addIdea}
-                disabled={!text.trim() || isSubmitting}
-                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-3 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-              >
-                {isSubmitting ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Posting...</span>
-                  </div>
-                ) : (
-                  'Share Idea'
-                )}
-              </button>
-            </div>
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Twitter-style Post Box */}
+        <div className="bg-white rounded-xl shadow-md p-4 mb-8 flex items-center space-x-3 border border-gray-100">
+          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+            {session.user.email?.charAt(0).toUpperCase()}
           </div>
+          <input
+            type="text"
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder="What's happening?"
+            className="flex-1 px-4 py-2 rounded-full border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-gray-50 outline-none"
+            maxLength={200}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                postIdea();
+              }
+            }}
+            disabled={isSubmitting}
+          />
+          <button
+            onClick={postIdea}
+            disabled={!text.trim() || isSubmitting}
+            className="ml-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-full font-bold hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? 'Posting...' : 'Post'}
+          </button>
         </div>
 
-        {/* Ideas List */}
-        <div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-            <span className="w-6 h-6 bg-gradient-to-r from-green-500 to-blue-600 rounded-lg flex items-center justify-center mr-3">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-            </span>
-            Recent Ideas
-          </h3>
-          
-          {ideas.length > 0 ? (
-            <div className="space-y-4">
-              {ideas.map((idea, index) => (
-                <div 
-                  key={idea.id} 
-                  className="group bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                      #{index + 1}
-                    </div>
-                    <div className="text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full">
-                      {new Date(idea.created_at).toLocaleDateString()}
+        {/* Timeline */}
+        <div className="relative">
+          <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-200 to-purple-200 z-0" />
+          <ul className="space-y-8 pl-0">
+            {isLoading ? (
+              [...Array(6)].map((_, i) => (
+                <li key={i} className="relative flex items-start space-x-4 animate-pulse">
+                  <div className="z-10 w-10 h-10 bg-gray-200 rounded-full" />
+                  <div className="flex-1">
+                    <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                    <div className="h-3 bg-gray-100 rounded w-1/3"></div>
+                  </div>
+                </li>
+              ))
+            ) : ideas.length > 0 ? (
+              ideas.map((idea, idx) => (
+                <li key={idea.id} className="relative flex items-start space-x-4">
+                  <div className="z-10 w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                    {idea.user_email?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-gray-900 text-base mb-1">{idea.text}</div>
+                    <div className="text-xs text-gray-400">
+                      {new Date(idea.created_at).toLocaleString()}
                     </div>
                   </div>
-                  
-                  <p className="text-gray-800 text-lg leading-relaxed mb-4 group-hover:text-gray-900 transition-colors duration-200">
-                    {idea.text}
-                  </p>
-                  
-                  <div className="flex items-center justify-between text-sm text-gray-500">
-                    <div className="flex items-center space-x-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span>{new Date(idea.created_at).toLocaleTimeString()}</span>
-                    </div>
-                    <div className="flex items-center space-x-1 text-blue-500">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <span className="font-medium">Spark</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-16 bg-white rounded-2xl shadow-lg">
-              <div className="w-20 h-20 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">No ideas yet</h3>
-              <p className="text-gray-600">Be the first to share an amazing idea!</p>
-            </div>
-          )}
+                </li>
+              ))
+            ) : (
+              <li className="relative flex items-start space-x-4">
+                <div className="z-10 w-10 h-10 bg-gray-200 rounded-full" />
+                <div className="flex-1 text-gray-400">No posts yet.</div>
+              </li>
+            )}
+          </ul>
         </div>
       </main>
     </div>
