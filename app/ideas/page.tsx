@@ -1,6 +1,5 @@
 'use client'
-import { useSessionContext } from '@supabase/auth-helpers-react'
-import { createBrowserClient } from '@supabase/ssr'
+import { useSessionContext, useSupabaseClient } from '@supabase/auth-helpers-react'
 import { useEffect, useState } from 'react'
 
 interface Idea {
@@ -11,8 +10,7 @@ interface Idea {
 
 export default function IdeasPage() {
   const { session } = useSessionContext()
-  // Replace with your actual env variables or config
-  const supabase = createBrowserClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!)
+  const supabase = useSupabaseClient()
   const [ideas, setIdeas] = useState<Idea[]>([])
   const [text, setText] = useState('')
 
