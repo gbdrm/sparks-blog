@@ -16,7 +16,7 @@ export default function IdeasPage() {
 
   const fetchIdeas = async () => {
     const { data, error } = await supabase
-      .from('ideas')
+      .from('Ideas')
       .select('*')
       .order('created_at', { ascending: false })
     if (error) {
@@ -28,7 +28,7 @@ export default function IdeasPage() {
 
   const addIdea = async () => {
     if (!text.trim()) return
-    const { error } = await supabase.from('ideas').insert([{ text }])
+    const { error } = await supabase.from('Ideas').insert([{ text }])
     if (error) {
       console.error(error)
       return
