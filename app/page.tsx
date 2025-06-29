@@ -7,8 +7,9 @@ interface Idea {
   text: string;
   created_at: string;
   user_email?: string;
-  likes: number;
   status: number;
+  likes_count?: number;
+  user_liked?: boolean;
 }
 
 export default function Home() {
@@ -18,20 +19,54 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [text, setText] = useState("");
   const [isPosting, setIsPosting] = useState(false);
+  const [postStatus, setPostStatus] = useState(0); // 0 = done, 1 = in progress
 
   const fetchIdeas = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('ideas')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(10);
-    if (error) {
-      console.error(error);
+    
+    if (!session) {
       setIsLoading(false);
       return;
     }
-    setIdeas(data || []);
+
+    // Fetch ideas with likes count and user's like status
+    const { data: ideasData, error: ideasError } = await supabase
+      .from('ideas')
+      .select(`
+        *,
+        likes_count:likes(count)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (ideasError) {
+      console.error(ideasError);
+      setIsLoading(false);
+      return;
+    }
+
+    // Fetch user's likes to determine which posts they've liked
+    const { data: userLikes, error: likesError } = await supabase
+      .from('likes')
+      .select('idea_id')
+      .eq('user_id', session.user.id);
+
+    if (likesError) {
+      console.error(likesError);
+      setIsLoading(false);
+      return;
+    }
+
+    const likedIdeaIds = new Set(userLikes?.map(like => like.idea_id) || []);
+
+    // Combine the data
+    const ideasWithLikes = ideasData?.map(idea => ({
+      ...idea,
+      likes_count: idea.likes_count?.[0]?.count || 0,
+      user_liked: likedIdeaIds.has(idea.id)
+    })) || [];
+
+    setIdeas(ideasWithLikes);
     setIsLoading(false);
   };
 
@@ -40,8 +75,7 @@ export default function Home() {
     setIsPosting(true);
     const { error } = await supabase.from('ideas').insert([{ 
       text,
-      likes: 0,
-      status: 1 // Default status for new ideas (not done)
+      status: postStatus
     }]);
     if (error) {
       console.error(error);
@@ -49,19 +83,44 @@ export default function Home() {
       return;
     }
     setText("");
+    setPostStatus(0); // Reset to done
     await fetchIdeas();
     setIsPosting(false);
   };
 
-  const toggleLike = async (ideaId: number, currentLikes: number) => {
-    const { error } = await supabase
-      .from('ideas')
-      .update({ likes: currentLikes + 1 })
-      .eq('id', ideaId);
-    if (error) {
-      console.error(error);
-      return;
+  const toggleLike = async (ideaId: number) => {
+    if (!session) return;
+
+    const idea = ideas.find(i => i.id === ideaId);
+    if (!idea) return;
+
+    if (idea.user_liked) {
+      // Unlike: remove from likes table
+      const { error } = await supabase
+        .from('likes')
+        .delete()
+        .eq('idea_id', ideaId)
+        .eq('user_id', session.user.id);
+      
+      if (error) {
+        console.error(error);
+        return;
+      }
+    } else {
+      // Like: add to likes table
+      const { error } = await supabase
+        .from('likes')
+        .insert([{
+          idea_id: ideaId,
+          user_id: session.user.id
+        }]);
+      
+      if (error) {
+        console.error(error);
+        return;
+      }
     }
+
     await fetchIdeas();
   };
 
@@ -92,7 +151,16 @@ export default function Home() {
 
   useEffect(() => {
     fetchIdeas();
-  }, []);
+  }, [session]);
+
+  // Calculate textarea height based on content
+  const calculateTextareaHeight = (text: string) => {
+    const lines = text.split('\n').length;
+    const baseHeight = 60;
+    const lineHeight = 24;
+    const maxHeight = 200;
+    return Math.min(Math.max(baseHeight, lines * lineHeight), maxHeight);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -151,32 +219,44 @@ export default function Home() {
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Twitter-style Post Box */}
         {session && (
-          <div className="bg-white rounded-xl shadow-md p-4 mb-8 flex items-start space-x-3 border border-gray-100">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-              {session.user.email?.charAt(0).toUpperCase()}
+          <div className="bg-white rounded-xl shadow-md p-4 mb-8 border border-gray-100">
+            <div className="flex items-start space-x-3 mb-3">
+              <textarea
+                value={text}
+                onChange={e => setText(e.target.value)}
+                placeholder="What's happening?"
+                className="flex-1 px-4 py-3 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-gray-50 outline-none resize-none overflow-y-auto"
+                rows={3}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+                    e.preventDefault();
+                    postIdea();
+                  }
+                }}
+                disabled={isPosting}
+                style={{ 
+                  height: `${calculateTextareaHeight(text)}px`
+                }}
+              />
+              <div className="flex flex-col items-end space-y-2">
+                <select
+                  value={postStatus}
+                  onChange={e => setPostStatus(Number(e.target.value))}
+                  className="px-3 py-1 text-sm border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={isPosting}
+                >
+                  <option value={0}>✓ Done</option>
+                  <option value={1}>○ In Progress</option>
+                </select>
+                <button
+                  onClick={postIdea}
+                  disabled={!text.trim() || isPosting}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-full font-bold hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isPosting ? 'Posting...' : 'Post'}
+                </button>
+              </div>
             </div>
-            <textarea
-              value={text}
-              onChange={e => setText(e.target.value)}
-              placeholder="What's happening?"
-              className="flex-1 px-4 py-2 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-gray-50 outline-none resize-none min-h-[48px] max-h-40"
-              maxLength={200}
-              rows={3}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
-                  e.preventDefault();
-                  postIdea();
-                }
-              }}
-              disabled={isPosting}
-            />
-            <button
-              onClick={postIdea}
-              disabled={!text.trim() || isPosting}
-              className="ml-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-full font-bold hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPosting ? 'Posting...' : 'Post'}
-            </button>
           </div>
         )}
 
@@ -208,23 +288,27 @@ export default function Home() {
                       </div>
                       <div className="flex items-center space-x-4">
                         <button
-                          onClick={() => toggleLike(idea.id, idea.likes)}
-                          className="flex items-center space-x-1 text-gray-500 hover:text-red-500 transition-colors"
+                          onClick={() => toggleLike(idea.id)}
+                          className={`flex items-center space-x-1 transition-colors ${
+                            idea.user_liked 
+                              ? 'text-red-500' 
+                              : 'text-gray-500 hover:text-red-500'
+                          }`}
                         >
-                          <svg className="w-4 h-4" fill={idea.likes > 0 ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill={idea.user_liked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                           </svg>
-                          <span className="text-sm">{idea.likes}</span>
+                          <span className="text-sm">{idea.likes_count || 0}</span>
                         </button>
                         <button
                           onClick={() => toggleStatus(idea.id, idea.status)}
                           className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium transition-colors ${
                             idea.status === 0 
                               ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
                           }`}
                         >
-                          <span>{idea.status === 0 ? '✓ Done' : '○ Pending'}</span>
+                          <span>{idea.status === 0 ? '✓ Done' : '○ In Progress'}</span>
                         </button>
                       </div>
                     </div>
