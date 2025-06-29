@@ -7,6 +7,8 @@ interface Idea {
   text: string;
   created_at: string;
   user_email?: string;
+  likes: number;
+  status: number;
 }
 
 export default function Home() {
@@ -20,7 +22,7 @@ export default function Home() {
   const fetchIdeas = async () => {
     setIsLoading(true);
     const { data, error } = await supabase
-      .from('Ideas')
+      .from('ideas')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(10);
@@ -36,7 +38,11 @@ export default function Home() {
   const postIdea = async () => {
     if (!text.trim()) return;
     setIsPosting(true);
-    const { error } = await supabase.from('Ideas').insert([{ text }]);
+    const { error } = await supabase.from('ideas').insert([{ 
+      text,
+      likes: 0,
+      status: 1 // Default status for new ideas (not done)
+    }]);
     if (error) {
       console.error(error);
       setIsPosting(false);
@@ -45,6 +51,31 @@ export default function Home() {
     setText("");
     await fetchIdeas();
     setIsPosting(false);
+  };
+
+  const toggleLike = async (ideaId: number, currentLikes: number) => {
+    const { error } = await supabase
+      .from('ideas')
+      .update({ likes: currentLikes + 1 })
+      .eq('id', ideaId);
+    if (error) {
+      console.error(error);
+      return;
+    }
+    await fetchIdeas();
+  };
+
+  const toggleStatus = async (ideaId: number, currentStatus: number) => {
+    const newStatus = currentStatus === 0 ? 1 : 0;
+    const { error } = await supabase
+      .from('ideas')
+      .update({ status: newStatus })
+      .eq('id', ideaId);
+    if (error) {
+      console.error(error);
+      return;
+    }
+    await fetchIdeas();
   };
 
   const signIn = async () => {
@@ -120,19 +151,19 @@ export default function Home() {
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Twitter-style Post Box */}
         {session && (
-          <div className="bg-white rounded-xl shadow-md p-4 mb-8 flex items-center space-x-3 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-md p-4 mb-8 flex items-start space-x-3 border border-gray-100">
             <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
               {session.user.email?.charAt(0).toUpperCase()}
             </div>
-            <input
-              type="text"
+            <textarea
               value={text}
               onChange={e => setText(e.target.value)}
               placeholder="What's happening?"
-              className="flex-1 px-4 py-2 rounded-full border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-gray-50 outline-none"
+              className="flex-1 px-4 py-2 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-gray-50 outline-none resize-none min-h-[48px] max-h-40"
               maxLength={200}
+              rows={3}
               onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
                   e.preventDefault();
                   postIdea();
                 }
@@ -170,9 +201,32 @@ export default function Home() {
                     {idea.user_email?.charAt(0).toUpperCase() || 'U'}
                   </div>
                   <div className="flex-1">
-                    <div className="text-gray-900 text-base mb-1">{idea.text}</div>
-                    <div className="text-xs text-gray-400">
-                      {new Date(idea.created_at).toLocaleString()}
+                    <div className="text-gray-900 text-base mb-2 whitespace-pre-wrap">{idea.text}</div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-gray-400">
+                        {new Date(idea.created_at).toLocaleString()}
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <button
+                          onClick={() => toggleLike(idea.id, idea.likes)}
+                          className="flex items-center space-x-1 text-gray-500 hover:text-red-500 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill={idea.likes > 0 ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                          </svg>
+                          <span className="text-sm">{idea.likes}</span>
+                        </button>
+                        <button
+                          onClick={() => toggleStatus(idea.id, idea.status)}
+                          className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium transition-colors ${
+                            idea.status === 0 
+                              ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          <span>{idea.status === 0 ? '✓ Done' : '○ Pending'}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </li>
