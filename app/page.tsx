@@ -23,13 +23,8 @@ export default function Home() {
 
   const fetchIdeas = async () => {
     setIsLoading(true);
-    
-    if (!session) {
-      setIsLoading(false);
-      return;
-    }
 
-    // Fetch ideas with likes count and user's like status
+    // Fetch ideas with likes count
     const { data: ideasData, error: ideasError } = await supabase
       .from('ideas')
       .select(`
@@ -45,25 +40,23 @@ export default function Home() {
       return;
     }
 
-    // Fetch user's likes to determine which posts they've liked
-    const { data: userLikes, error: likesError } = await supabase
-      .from('likes')
-      .select('idea_id')
-      .eq('user_id', session.user.id);
-
-    if (likesError) {
-      console.error(likesError);
-      setIsLoading(false);
-      return;
+    let likedIdeaIds = new Set();
+    if (session) {
+      // Fetch user's likes to determine which posts they've liked
+      const { data: userLikes, error: likesError } = await supabase
+        .from('likes')
+        .select('idea_id')
+        .eq('user_id', session.user.id);
+      if (!likesError && userLikes) {
+        likedIdeaIds = new Set(userLikes.map(like => like.idea_id));
+      }
     }
-
-    const likedIdeaIds = new Set(userLikes?.map(like => like.idea_id) || []);
 
     // Combine the data
     const ideasWithLikes = ideasData?.map(idea => ({
       ...idea,
       likes_count: idea.likes_count?.[0]?.count || 0,
-      user_liked: likedIdeaIds.has(idea.id)
+      user_liked: session ? likedIdeaIds.has(idea.id) : false
     })) || [];
 
     setIdeas(ideasWithLikes);
