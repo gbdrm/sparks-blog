@@ -7,7 +7,6 @@ interface Idea {
   text: string
   created_at: string
   user_email?: string
-  status: number
   likes_count?: number
   user_liked?: boolean
 }
@@ -19,7 +18,6 @@ export default function IdeasPage() {
   const [text, setText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [postStatus, setPostStatus] = useState(0) // 0 = done, 1 = in progress
 
   const fetchIdeas = async () => {
     setIsLoading(true)
@@ -67,8 +65,7 @@ export default function IdeasPage() {
     if (!text.trim()) return
     setIsSubmitting(true)
     const { error } = await supabase.from('ideas').insert([{ 
-      text,
-      status: postStatus
+      text
     }])
     if (error) {
       console.error(error)
@@ -76,7 +73,6 @@ export default function IdeasPage() {
       return
     }
     setText('')
-    setPostStatus(0) // Reset to done
     await fetchIdeas()
     setIsSubmitting(false)
   }
@@ -114,19 +110,6 @@ export default function IdeasPage() {
       }
     }
 
-    await fetchIdeas()
-  }
-
-  const toggleStatus = async (ideaId: number, currentStatus: number) => {
-    const newStatus = currentStatus === 0 ? 1 : 0
-    const { error } = await supabase
-      .from('ideas')
-      .update({ status: newStatus })
-      .eq('id', ideaId)
-    if (error) {
-      console.error(error)
-      return
-    }
     await fetchIdeas()
   }
 
@@ -222,24 +205,13 @@ export default function IdeasPage() {
                 height: `${calculateTextareaHeight(text)}px`
               }}
             />
-            <div className="flex flex-col items-end space-y-2">
-              <select
-                value={postStatus}
-                onChange={e => setPostStatus(Number(e.target.value))}
-                className="px-3 py-1 text-sm border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={isSubmitting}
-              >
-                <option value={0}>✓ Done</option>
-                <option value={1}>○ In Progress</option>
-              </select>
-              <button
-                onClick={postIdea}
-                disabled={!text.trim() || isSubmitting}
-                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-full font-bold hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? 'Posting...' : 'Post'}
-              </button>
-            </div>
+            <button
+              onClick={postIdea}
+              disabled={!text.trim() || isSubmitting}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-full font-bold hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Posting...' : 'Post'}
+            </button>
           </div>
         </div>
 
@@ -282,16 +254,6 @@ export default function IdeasPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                           </svg>
                           <span className="text-sm">{idea.likes_count || 0}</span>
-                        </button>
-                        <button
-                          onClick={() => toggleStatus(idea.id, idea.status)}
-                          className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium transition-colors ${
-                            idea.status === 0 
-                              ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                              : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
-                          }`}
-                        >
-                          <span>{idea.status === 0 ? '✓ Done' : '○ In Progress'}</span>
                         </button>
                       </div>
                     </div>
